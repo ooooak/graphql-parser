@@ -35,24 +35,28 @@ func InitLexer(source string) *Lexer {
 	}
 }
 
-func (l *Lexer) peek() (rune, int) {
-	return utf8.DecodeRuneInString(l.source[l.pos:])
-}
-
 func (l *Lexer) get() rune {
 	token, count := utf8.DecodeRuneInString(l.source[l.pos:])
 	l.pos += count
 	return token
 }
 
+func (l *Lexer) peek() (rune, int) {
+	return utf8.DecodeRuneInString(l.source[l.pos:])
+}
+
+func (l *Lexer) skip(num int) {
+	l.pos += num
+}
+
 func (l *Lexer) createToken(tokenKind TokenKind, start int) (*Token, error) {
 	return &Token{tokenKind, start, l.pos, l.line, string(l.source[start:l.pos]), 0, nil, nil}, nil
 }
 
-func (l *Lexer) createSingleToken(tokenKind TokenKind) (*Token, error) {
+func (l *Lexer) createSingleToken(tk TokenKind) (*Token, error) {
 	start := l.pos
 	l.pos += 1 // increment
-	return &Token{tokenKind, start, start + 1, l.line, string(TK_EOF), 0, nil, nil}, nil
+	return &Token{tk, start, start + 1, l.line, string(tk), 0, nil, nil}, nil
 }
 
 func (l *Lexer) ReadToken() (*Token, error) {
@@ -66,7 +70,7 @@ func (l *Lexer) ReadToken() (*Token, error) {
 	c, _ := l.peek()
 	switch c {
 	case '!':
-		return l.createSingleToken(TK_EOF)
+		return l.createSingleToken(TK_BANG)
 		// 	case '#': // #
 	// 		return l.readComment($line, $col, $prev)
 	case '$':
@@ -117,16 +121,14 @@ func (l *Lexer) ReadToken() (*Token, error) {
 	case '}':
 		return l.createSingleToken(TK_BRACKET_R)
 
-	case '_', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
-		'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't',
-		'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E',
-		'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-		'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z':
-		return l.readName()
+	default:
+		if isNameStart(c) {
+			return l.readName()
+		}
 
-	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-		return l.readNumber()
-
+		if isNumberStart(c) {
+			return l.readNumber()
+		}
 	}
 
 	return nil, errors.New("Unaexpted character")
@@ -144,4 +146,89 @@ func (l *Lexer) readName() (*Token, error) {
 	}
 
 	return l.createToken(TK_NAME, start)
+}
+
+func (l *Lexer) readNumber() (*Token, error) {
+	start := l.pos
+	isFloat := false
+	c, _ := l.peek()
+	if c == '-' {
+		l.skip(1)
+	}
+
+	c, _ = l.peek()
+	if c == '0' {
+		l.skip(1)
+		c, _ = l.peek()
+		if isDigit(c) {
+			return nil, errors.New(`Invalid number, unexpected digit after 0`)
+		}
+	} else {
+		err := l.readDigits()
+		if err != nil {
+			return nil, err
+		}
+		c, _ = l.peek()
+	}
+
+	if c == '.' {
+		isFloat = true
+		l.skip(1)
+
+		l.readDigits()
+		c, _ = l.peek()
+	}
+
+	if c == 'E' || c == 'e' {
+		isFloat = true
+		c = l.get()
+		// + -
+		if c == '+' || c == '-' {
+			c = l.get()
+		}
+		l.readDigits()
+		c, _ = l.peek()
+	}
+
+	if c == '.' || isNameStart(c) {
+		return nil, errors.New("Invalid number, expected digit but got . or name")
+	}
+
+	if isFloat {
+		return l.createToken(TK_FLOAT, start)
+	}
+
+	return l.createToken(TK_INT, start)
+}
+
+func isDigit(code rune) bool {
+	return code >= '0' && code <= '9'
+}
+
+func (l *Lexer) readDigits() error {
+	c, _ := l.peek()
+	if !isDigit(c) {
+		return errors.New(`Invalid number, unexpected digit after 0`)
+	}
+
+	l.skip(1)
+
+	for {
+		c, _ = l.peek()
+		if isDigit(c) {
+			l.skip(1)
+		} else {
+			break
+		}
+	}
+
+	return nil
+}
+
+func isNameStart(c rune) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
+}
+
+func isNumberStart(c rune) bool {
+	return (c >= '0' && c <= '9') || c == '-'
 }
