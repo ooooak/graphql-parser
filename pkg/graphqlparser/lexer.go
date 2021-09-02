@@ -45,6 +45,15 @@ func (l *Lexer) peek() (rune, int) {
 	return utf8.DecodeRuneInString(l.source[l.pos:])
 }
 
+func (l *Lexer) nth(val int) rune {
+	index := l.pos + val
+	if index < l.sourceLen {
+		c, _ := utf8.DecodeRuneInString(l.source[index:])
+		return c
+	}
+	return 0
+}
+
 func (l *Lexer) skip(num int) {
 	l.pos += num
 }
@@ -81,15 +90,11 @@ func (l *Lexer) ReadToken() (*Token, error) {
 		return l.createSingleToken(TK_PAREN_L)
 	case ')':
 		return l.createSingleToken(TK_PAREN_R)
-		// 		case self::TOKEN_DOT: // .
-		// 				[, $charCode1] = $this->readChar(true);
-		// 				[, $charCode2] = $this->readChar(true);
-
-		// 				if ($charCode1 === self::TOKEN_DOT && $charCode2 === self::TOKEN_DOT) {
-		// 						return new Token(Token::SPREAD, $position, $position + 3, $line, $col, $prev);
-		// 				}
-
-		// 				break;
+	case '.':
+		if l.nth(2) == '.' && l.nth(3) == '.' {
+			return l.createToken(TK_SPREAD, l.pos+3)
+		}
+		break // why break?
 
 		// 		case 34:
 	// 				[, $nextCode]     = $this->readChar();
